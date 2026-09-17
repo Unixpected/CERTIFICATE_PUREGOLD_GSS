@@ -152,6 +152,31 @@ button.action.ghost:hover{background:rgba(27,110,47,.06);}
 .nameSuggestItem .nsName{font-weight:600; color:#1b1b1b;}
 .nameSuggestItem .nsMeta{font-size:11px; color:#777; white-space:nowrap;}
 .nameSuggestEmpty{padding:8px 10px; font-size:13px; color:#888; font-style:italic;}
+.gateOverlay{
+  position:fixed; inset:0; z-index:9999;
+  background:linear-gradient(160deg,#123a1c,#1e5c30);
+  display:flex; align-items:center; justify-content:center;
+}
+.gateBox{
+  background:#fff; border-radius:12px; padding:32px 28px; width:min(90vw,340px);
+  text-align:center; box-shadow:0 12px 30px rgba(0,0,0,.35);
+}
+.gateEmoji{font-size:36px; margin-bottom:6px;}
+.gateBox h2{margin:0 0 6px; font-size:16px; color:#1e5c30;}
+.gateBox p{margin:0 0 16px; font-size:13px; color:#555;}
+.gatePassInput{
+  width:100%; box-sizing:border-box; padding:10px 12px; font-size:16px;
+  text-align:center; letter-spacing:2px; border:2px solid #ccc; border-radius:8px;
+  margin-bottom:10px; text-transform:uppercase;
+}
+.gatePassInput:focus{outline:none; border-color:#3fa14a;}
+.gateBtn{
+  width:100%; padding:10px; font-size:14px; font-weight:600; color:#fff;
+  background:#1e5c30; border:none; border-radius:8px; cursor:pointer;
+}
+.gateBtn:hover{background:#164322;}
+.gateError{margin-top:10px; color:#a12525; font-size:13px; font-weight:600;}
+.gateHint{margin-top:14px; font-size:11px; color:#999;}
 
 canvas{border:1px solid var(--line);max-width:100%;height:auto;display:block;margin:14px auto;
   background:#fff;border-radius:8px;box-shadow:var(--shadow-sm);}
@@ -216,10 +241,23 @@ legend{font-size:11.5px;font-weight:700;color:var(--muted);padding:0 8px;text-tr
 </style>
 </head>
 <body>
+<div id="gateOverlay" class="gateOverlay">
+  <div class="gateBox">
+    <div class="gateEmoji">🔒</div>
+    <h2>Puregold Ka-Asenso Certificate Printer</h2>
+    <p>Enter today's access code to continue.</p>
+    <input type="text" id="gatePassInput" class="gatePassInput" placeholder="Access code" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="gateBtn" onclick="checkGatePassword()">Unlock</button>
+    <div id="gateError" class="gateError" style="display:none;">❌ Incorrect code. Please try again.</div>
+    <div class="gateHint">Ask your admin for today's code if you don't have it.</div>
+  </div>
+</div>
+<div id="appRoot" style="display:none;">
 <header>
   <div>
     <h1><span style="font-size:22px;">🏅</span> Puregold Ka-Asenso Certificate Printer</h1>
     <div class="headerSub">Scan a card, pick a template, print a certificate — in under a minute.</div>
+
   </div>
   <span class="small" id="dbCount" style="color: #FFD700;"></span>
   
@@ -527,6 +565,60 @@ legend{font-size:11.5px;font-weight:700;color:var(--muted);padding:0 8px;text-tr
 </main>
 
 <script>
+/* ---------------- Daily access gate ---------------- */
+// Change this salt to whatever you like — it's the "secret" mixed into each
+// day's code. Anyone reading this file on GitHub can see the salt and the
+// formula, so a determined developer CAN recompute the code by hand; this
+// isn't real encryption. What it does do is stop casual copy-pasters: they
+// can't just open the HTML and use it, they'd have to actually read the
+// script, understand the SHA-256 step, and run it themselves.
+const GATE_SALT = "PGKA-2026-CHANGE-ME";
+
+async function computeDailyCode(dateStr){
+  const enc = new TextEncoder().encode(GATE_SALT + ':' + dateStr);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  const hex = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const code = hex.slice(0,8).toUpperCase();
+  return code.slice(0,4) + '-' + code.slice(4,8);
+}
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+async function checkGatePassword(){
+  const input = document.getElementById('gatePassInput');
+  const entered = input.value.trim().toUpperCase();
+  const today = todayStr();
+  const correct = await computeDailyCode(today);
+  if(entered === correct){
+    localStorage.setItem('pg_gate_ok_date', today);
+    unlockApp();
+  } else {
+    document.getElementById('gateError').style.display = 'block';
+    input.value = '';
+    input.focus();
+  }
+}
+
+function unlockApp(){
+  document.getElementById('gateOverlay').style.display = 'none';
+  document.getElementById('appRoot').style.display = '';
+}
+
+async function initGate(){
+  const today = todayStr();
+  if(localStorage.getItem('pg_gate_ok_date') === today){
+    unlockApp();
+    return;
+  }
+  document.getElementById('gatePassInput').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') checkGatePassword();
+  });
+}
+initGate();
+
 /* ---------------- Default member data (Libertad Top 200, June 2026 scorecard) ---------------- */
 const DEFAULT_MEMBERS = [{"card": "CN0200000000006200", "name": "OBUYES, EMILY B", "storeCode": "115"}, {"card": "CN0200000000007909", "name": "REOMALES, JEANNE REMOLACIO", "storeCode": "115"}, {"card": "CN0200000000009235", "name": "DE LEON, ARLENE P", "storeCode": "115"}, {"card": "CN0200000000005021", "name": "FLORMATA, HENRY R", "storeCode": "115"}, {"card": "CN0200000000012391", "name": "HASHIMM, EVANGELINE C", "storeCode": "115"}, {"card": "CN0200000000005437", "name": "DE CASTRO, ELIZABETH SIMBULAN", "storeCode": "115"}, {"card": "CN0200000000003381", "name": "MENDOZA, DARLEN LOPE", "storeCode": "115"}, {"card": "CN0200000000006416", "name": "FLOR, CARMELITA CO", "storeCode": "115"}, {"card": "CN0200000000011517", "name": "ABANILLA, DEMETRIO ABDON", "storeCode": "115"}, {"card": "CN0200000000007248", "name": "TENGCO, MELANIE WARDLEY", "storeCode": "115"}, {"card": "CN0200000000005935", "name": "DY, SHARNHEL CARDANO", "storeCode": "115"}, {"card": "CN0100000001433405", "name": "DELOS REYES, GRACE V", "storeCode": "115"}, {"card": "CN0200000000005489", "name": "LADISLA, ALFIE G.", "storeCode": "115"}, {"card": "CN0100000001174346", "name": "ABELA, ROBERT ERA", "storeCode": "115"}, {"card": "CN0100000001585592", "name": "FIGUEROA, JENNY A", "storeCode": "115"}, {"card": "CN0100000001304692", "name": "REYES, JIMMY CRUZ", "storeCode": "115"}, {"card": "CN0100000001429963", "name": "PORFIRIO, LASAT MANTUANO", "storeCode": "115"}, {"card": "CN0200000000012671", "name": "LABARIS, JUDY A", "storeCode": "115"}, {"card": "CN0100000000874394", "name": "SOSA, BERNABE MAYORGA", "storeCode": "115"}, {"card": "CN0100000001691179", "name": "ILUSTRE, RODEL GAMBOA", "storeCode": "115"}, {"card": "CN0200000000014672", "name": "LOVE, FALLORINA O", "storeCode": "115"}, {"card": "CN0200000000000627", "name": "DELA CRUZ, VILMA INGUILLO", "storeCode": "115"}, {"card": "CN0200000000006395", "name": "YANOC, TOMASA B", "storeCode": "115"}, {"card": "CN0100000000018181", "name": "OSMA, LEA ARELLANO", "storeCode": "115"}, {"card": "CN0100000000845512", "name": "OSORIO, EMMAN EVANGELIO", "storeCode": "115"}, {"card": "CN0100000001478364", "name": "DEL ROSARIO, ROBERTO MAGNO", "storeCode": "115"}, {"card": "CN0100000001572730", "name": "INFANTE, MELANIE RAMOS", "storeCode": "115"}, {"card": "CN0100000000159079", "name": "BARRIENTOS, MERLY EUSEBIO", "storeCode": "115"}, {"card": "CN0200000000013543", "name": "AREVALO, AMALIA ALDEA", "storeCode": "115"}, {"card": "CN0100000000651917", "name": "DELGADO, MITUS MANAYAO", "storeCode": "115"}, {"card": "CN0100000000024954", "name": "YUTILA, LEONORA AYHON", "storeCode": "115"}, {"card": "CN0100000000021425", "name": "ARO, ROLANDO N", "storeCode": "115"}, {"card": "CN0100000000429266", "name": "SEBASTIAN, FLERIDA M", "storeCode": "115"}, {"card": "CN0100000001696273", "name": "DUBAN, WENIEFREDA M", "storeCode": "115"}, {"card": "CN0100000000029666", "name": "BOLANOS, GENEROSE ESTROLOGO", "storeCode": "115"}, {"card": "CN0100000001056408", "name": "BAGUIO, LORGINA BALANSAG", "storeCode": "115"}, {"card": "CN0100000002012958", "name": "MICRANDAYO, GABRIEL CURAZA", "storeCode": "115"}, {"card": "CN0100000001056563", "name": "ANATEN, ADORA SILVERIO", "storeCode": "115"}, {"card": "CN0100000001202084", "name": "BACOLOD, MILONA NONE", "storeCode": "115"}, {"card": "CN0100000000041752", "name": "SUMATRA, PEREGRINA JALLORES", "storeCode": "115"}, {"card": "CN0100000001901518", "name": "QUILINGUIN, ANALIZA H", "storeCode": "115"}, {"card": "CN0100000000717590", "name": "REYES, REMEDIOS SANTOS", "storeCode": "115"}, {"card": "CN0100000000973223", "name": "AGUIRRE, AGNES MOHAMAD", "storeCode": "115"}, {"card": "CN0100000002110856", "name": "LARIOZA, CARLA CUETO", "storeCode": "115"}, {"card": "CN0100000001933724", "name": "DELA CRUZ, ROSSEL ORILLA", "storeCode": "115"}, {"card": "CN0100000001260600", "name": "PERNITO, LEIZEL ROSALIJOS", "storeCode": "115"}, {"card": "CN0100000001805137", "name": "LAS, RORELYN A", "storeCode": "115"}, {"card": "CN0100000000769302", "name": "COMIA, EDARLYN BAUTISTA", "storeCode": "115"}, {"card": "CN0100000000993503", "name": "PAJAGANAS, DOLOR CUSTODIO", "storeCode": "115"}, {"card": "CN0100000002116702", "name": "LLEVADO, VILMA A.", "storeCode": "115"}, {"card": "CN0100000000925526", "name": "CHAVEZ, MARILYN NEVADO", "storeCode": "115"}, {"card": "CN0100000000118266", "name": "MARINAS, ELENITA SICURATA", "storeCode": "115"}, {"card": "CN0100000001928794", "name": "MILLAR, MARICEL C", "storeCode": "115"}, {"card": "CN0100000001338241", "name": "ABELLA, JOCELYN UROT", "storeCode": "115"}, {"card": "CN0100000000915223", "name": "CATA, MARILOU REYES", "storeCode": "115"}, {"card": "CN0100000001152266", "name": "CAS, JOSE CANADA", "storeCode": "115"}, {"card": "CN0100000001294880", "name": "ALICANTE, HEIDE BUSTAMANTE", "storeCode": "115"}, {"card": "CN0100000002068197", "name": "PACIGADO, MA. ERLINDA P.", "storeCode": "115"}, {"card": "CN0100000001367355", "name": "ALFONGA, RODERICK ONDE", "storeCode": "115"}, {"card": "CN0200000000013280", "name": "EPIL, JOCELYN F", "storeCode": "115"}, {"card": "CN0100000001858624", "name": "RELOX, JERENE A", "storeCode": "115"}, {"card": "CN0100000000033190", "name": "BULILAN, MARGIE L", "storeCode": "115"}, {"card": "CN0100000001756536", "name": "MOGUEIS, MARK ALVIN P", "storeCode": "115"}, {"card": "CN0100000001361827", "name": "DATA, ROSARIO LOURDES LOPE", "storeCode": "115"}, {"card": "CN0100000001792294", "name": "DELA CRUZ, H0LITO FLORES", "storeCode": "115"}, {"card": "CN0100000001195625", "name": "MERZA, ROMELA TOLENTINO", "storeCode": "115"}, {"card": "CN0100000002013163", "name": "CAMACHO, JOYLEN CADA", "storeCode": "115"}, {"card": "CN0100000001272188", "name": "ESPIRITU, MARY JANE .", "storeCode": "115"}, {"card": "CN0100000000353071", "name": "ORDENIZA, ROSALINDA TOLEDO", "storeCode": "115"}, {"card": "CN0100000000011138", "name": "DANGO, MINENE C", "storeCode": "115"}, {"card": "CN0100000001281325", "name": "MAGLAYA, MARY JANE GONZA", "storeCode": "115"}, {"card": "CN0100000001100552", "name": "SILVA, MARY AN E.", "storeCode": "115"}, {"card": "CN0100000001951791", "name": "ANTONIO, ANALIZA GO", "storeCode": "115"}, {"card": "CN0100000000065976", "name": "REGIS, AMPARO FORTALEZA", "storeCode": "115"}, {"card": "CN0100000001676904", "name": "CUSTODIO, JOSELITO BALINGCONGAN", "storeCode": "115"}, {"card": "CN0100000001628781", "name": "SALCEDO, MICHELLE E", "storeCode": "115"}, {"card": "CN0100000001550262", "name": "GUMBAN, ROWENA PALMA", "storeCode": "115"}, {"card": "CN0100000000024038", "name": "MIA, REOLANDO Z.", "storeCode": "115"}, {"card": "CN0100000000587734", "name": "LOMTONG, MA TERESA SALVADOR", "storeCode": "115"}, {"card": "CN0100000000059851", "name": "MOJICA JR, JOSE NEVALLO", "storeCode": "115"}, {"card": "CN0100000000076633", "name": "CELESTIAL, GISELLE E", "storeCode": "115"}, {"card": "CN0100000001997129", "name": "BULOS, LOLITA TAN", "storeCode": "115"}, {"card": "CN0100000001364287", "name": "PIL, JEORILYN YANGYANG", "storeCode": "115"}, {"card": "CN0100000001941520", "name": "MERCADAL, MAECHE V", "storeCode": "115"}, {"card": "CN0100000001564724", "name": "PASCUA, HERMELINA C", "storeCode": "115"}, {"card": "CN0100000001960253", "name": "ROSIMO, ROSARIO NICOMEDES", "storeCode": "115"}, {"card": "CN0100000001189730", "name": "ZAMORA, EDGARDO KING", "storeCode": "115"}, {"card": "CN0200000000011164", "name": "BLONES, FLORDELINE MANTEZA", "storeCode": "115"}, {"card": "CN0100000001717332", "name": "BAYOLA, LEONOR N", "storeCode": "115"}, {"card": "CN0100000000048871", "name": "MADRONA, MAGDALENA BEDIO", "storeCode": "115"}, {"card": "CN0100000001215067", "name": "ARUTA, JENNIFER ARENAS", "storeCode": "115"}, {"card": "CN0100000001122825", "name": "GEROLAGA, NERIE A", "storeCode": "115"}, {"card": "CN0100000001177947", "name": "MACABULLOG, RONALYN JAY VASQUEZ", "storeCode": "115"}, {"card": "CN0100000002034765", "name": "GRANADA, JOHN FRITZ G", "storeCode": "115"}, {"card": "CN0100000001652352", "name": "DELOS SANTOS, IMELDA BARTOLAY", "storeCode": "115"}, {"card": "CN0100000001103229", "name": "LAURENCIANA, MICHELLE MANLITOC", "storeCode": "115"}, {"card": "CN0100000001790035", "name": "SOLIS, JANET EPIL", "storeCode": "115"}, {"card": "CN0100000001105872", "name": "DIGAY, JUMER MIRASOL", "storeCode": "115"}, {"card": "CN0100000000486061", "name": "VENTURA, EDSEL LOPEZ", "storeCode": "115"}, {"card": "CN0200000000013432", "name": "TAPUROK, GERAMAE M", "storeCode": "115"}, {"card": "CN0100000001059035", "name": "TAN, JESSAN BRACERO", "storeCode": "115"}, {"card": "CN0100000000045214", "name": "LOMTONG, GINA P", "storeCode": "115"}, {"card": "CN0100000000440959", "name": "TUBIERA, JENNIBETH TIMBAL", "storeCode": "115"}, {"card": "CN0100000001364489", "name": "SERRANO, ARNEL MAMILOTO", "storeCode": "115"}, {"card": "CN0100000001895845", "name": "PANGARAL, ANGELA TUTOR", "storeCode": "115"}, {"card": "CN0100000001439866", "name": "CORNELIO, DIONAFE GARRUCHO", "storeCode": "115"}, {"card": "CN0100000001384387", "name": "DUARTE, NARCISA CIABO", "storeCode": "115"}, {"card": "CN0100000001254683", "name": "DALIPE, MELROSE B.", "storeCode": "115"}, {"card": "CN0100000001983609", "name": "BARLICOS, ESTRELITA VILLUAN", "storeCode": "115"}, {"card": "CN0100000000172663", "name": "ANDRADE, ELIZABETH DE VERA", "storeCode": "115"}, {"card": "CN0100000000893404", "name": "ESTEBAN, FROILAN MIRANDA", "storeCode": "115"}, {"card": "CN0100000000982079", "name": "GUEVARA, JUDITH ABARCA", "storeCode": "115"}, {"card": "CN0100000000982342", "name": "GAMBOA, DOMINGO A.", "storeCode": "115"}, {"card": "CN0100000001270107", "name": "HALOG, KAREN SANCHEZ", "storeCode": "115"}, {"card": "CN0100000001754935", "name": "YUMANG, NERIE ROSE VILLADORES", "storeCode": "115"}, {"card": "CN0100000001027972", "name": "PETATE, FREDERICK PABLE", "storeCode": "115"}, {"card": "CN0100000001463669", "name": "ROSAL, HENRY JR AMARILLE", "storeCode": "115"}, {"card": "CN0100000001214039", "name": "ESPINA, ENRIQUETA MIGUEL", "storeCode": "115"}, {"card": "CN0100000001545607", "name": "MOLAVIN, NENITA B", "storeCode": "115"}, {"card": "CN0100000000050780", "name": "BAYOTAS, ANNABEL ESPINOZA", "storeCode": "115"}, {"card": "CN0100000001437992", "name": "DELA CRUZ, AMOR M", "storeCode": "115"}, {"card": "CN0100000001306573", "name": "ADVINCULA, MARICEL CASTEJON", "storeCode": "115"}, {"card": "CN0100000001845314", "name": "MANROQUE, ZENAIDA N", "storeCode": "115"}, {"card": "CN0100000000063177", "name": "TEOFILO, MELYN T", "storeCode": "115"}, {"card": "CN0100000001259412", "name": "MARASIGAN, EUFROSINA ARGUELLES", "storeCode": "115"}, {"card": "CN0100000000036863", "name": "RONDIJA, GINA R", "storeCode": "115"}, {"card": "CN0100000002110580", "name": "ESTOJERO, FE GAMBOA", "storeCode": "115"}, {"card": "CN0100000001826061", "name": "NAVARRO, GINA G", "storeCode": "115"}, {"card": "CN0100000001265580", "name": "BERNARDO, NOVA BULANDRINA", "storeCode": "115"}, {"card": "CN0100000000373998", "name": "SILAGAN, LETECIA DECENILLA", "storeCode": "115"}, {"card": "CN0100000000097278", "name": "DE GUENO, MA THERESA DAVID", "storeCode": "115"}, {"card": "CN0100000001838031", "name": "NAVAL, MARICEL GABRILIES", "storeCode": "115"}, {"card": "CN0100000001739148", "name": "LIBRADO, WARREN CARINO", "storeCode": "115"}, {"card": "CN0100000001291621", "name": "MICRANDAYO, FE C", "storeCode": "115"}, {"card": "CN0100000001262476", "name": "BERNARDINO, FELICIANA DELGADO", "storeCode": "115"}, {"card": "CN0100000001094160", "name": "TESORERO, MARIVIC TABIRAO", "storeCode": "115"}, {"card": "CN0100000001344085", "name": "PERALTA, EMELY YAP", "storeCode": "115"}, {"card": "CN0100000001760390", "name": "BARCENA, CHERHILYN L.", "storeCode": "115"}, {"card": "CN0200000000012324", "name": "MEDINA, MARY GRACE EJERCITO", "storeCode": "115"}, {"card": "CN0100000001984111", "name": "DIMAANO, ANALYN MARTY", "storeCode": "115"}, {"card": "CN0200000000005425", "name": "PARDILLO, DEODITA D", "storeCode": "115"}, {"card": "CN0100000001440023", "name": "DIARIOS, NOEMY DE LEON", "storeCode": "115"}, {"card": "CN0100000001381386", "name": "CASANOVA, MARK  ANTH ADRIANO", "storeCode": "115"}, {"card": "CN0100000001438274", "name": "ESTANIO, LORNA E", "storeCode": "115"}, {"card": "CN0100000001369914", "name": "VELENA, MA MARECITA D", "storeCode": "115"}, {"card": "CN0100000000423559", "name": "BUENAFLOR, CRISTINA IBARRIENTOS", "storeCode": "115"}, {"card": "CN0100000001293996", "name": "ROXAS, MARIA JOSEFINA CALDO", "storeCode": "115"}, {"card": "CN0100000001249164", "name": "SANCHEZ, AIDALOR ALCONTIN", "storeCode": "115"}, {"card": "CN0100000001863468", "name": "CASTANEDA, JULIET LIWANAG", "storeCode": "115"}, {"card": "CN0100000001522374", "name": "LAMYON, DINA GABRIEL", "storeCode": "115"}, {"card": "CN0100000001998705", "name": "ADALLA, MAYLINE MONTANO", "storeCode": "115"}, {"card": "CN0100000001345849", "name": "OQUINO, EMILITA PEREZ", "storeCode": "115"}, {"card": "CN0100000001131650", "name": "BILLONES, MARITES FRANCISCO", "storeCode": "115"}, {"card": "CN0100000000069194", "name": "ARANETA, DANILO PINEDA", "storeCode": "115"}, {"card": "CN0100000001592358", "name": "REDOVAN, BELLA DEVERA", "storeCode": "115"}, {"card": "CN0100000001346739", "name": "IGNACIO, EMERIDEL BERNARDO", "storeCode": "115"}, {"card": "CN0100000000872392", "name": "SANTILLIAN, ERLY TUBANIA", "storeCode": "115"}, {"card": "CN0100000001039592", "name": "NARCISO, VALENTINO MANATAD", "storeCode": "115"}, {"card": "CN0100000001954623", "name": "CLEMENTE, MERDECITA GONZAGA", "storeCode": "115"}, {"card": "CN0100000001569015", "name": "MARASIGAN, GLORIA REQUIZ", "storeCode": "115"}, {"card": "CN0100000000044948", "name": "SIERRAS, MARILINA S", "storeCode": "115"}, {"card": "CN0100000001226879", "name": "BARON, JOCELYN CORPUZ", "storeCode": "115"}, {"card": "CN0100000000065930", "name": "CONSTANTINO, ROSEMARIE D", "storeCode": "115"}, {"card": "CN0100000001979671", "name": "TAPIA, MARIA CIEZL A", "storeCode": "115"}, {"card": "CN0100000001759801", "name": "EBE, CONCEPCION ORDIALES", "storeCode": "115"}, {"card": "CN0100000001255232", "name": "ESPULGAR, JHOANNA VEGA", "storeCode": "115"}, {"card": "CN0100000000067754", "name": "BARRUN, MARITES A", "storeCode": "115"}, {"card": "CN0100000000633283", "name": "CASTRO, MERLINDA INOVEJAS", "storeCode": "115"}, {"card": "CN0100000001077100", "name": "SEBUGAN, EDITA MORALES", "storeCode": "115"}, {"card": "CN0100000001974501", "name": "CORONEL, EMELICITA S", "storeCode": "115"}, {"card": "CN0100000002027173", "name": "CEDILLA, TERESA DELA CRUZ", "storeCode": "115"}, {"card": "CN0100000002061661", "name": "IRENEA, TERESA BOMBITA", "storeCode": "115"}, {"card": "CN0100000001346934", "name": "ROCHA, NERISSA JORE", "storeCode": "115"}, {"card": "CN0100000001970018", "name": "LORIA, MAELENA ROBLES", "storeCode": "115"}, {"card": "CN0100000001107079", "name": "MORILLA, VICKY B", "storeCode": "115"}, {"card": "CN0100000002119017", "name": "DIAZ, JACKELYN G", "storeCode": "115"}, {"card": "CN0100000001479531", "name": "SANTOS, ANGELITA VILLEZA", "storeCode": "115"}, {"card": "CN0100000001263754", "name": "GONZALES, MARGIE QUIDES", "storeCode": "115"}, {"card": "CN0100000002135221", "name": "CALZADO, ELENITA EBORDA", "storeCode": "115"}, {"card": "CN0100000000113951", "name": "SATO, SHIRLEY DIOLATA", "storeCode": "115"}, {"card": "CN0100000001030006", "name": "GALANG, MARILOU BEARIS", "storeCode": "115"}, {"card": "CN0100000001039680", "name": "BUSANTE, MARICRIS L", "storeCode": "115"}, {"card": "CN0100000001821922", "name": "ENMEL, RELITA LAS PINAS", "storeCode": "115"}, {"card": "CN0100000000258346", "name": "ALMOJUELA, LENY S", "storeCode": "115"}, {"card": "CN0100000001108959", "name": "JACILDO, LIBERTAD DOMDOM", "storeCode": "115"}, {"card": "CN0100000001845462", "name": "ROQUE, MYRNA ESPINO", "storeCode": "115"}, {"card": "CN0100000001679413", "name": "DEL MUNDO, MA.VICTORIA R", "storeCode": "115"}, {"card": "CN0100000001738521", "name": "BAJA, TEODOLO C", "storeCode": "115"}, {"card": "CN0100000001361282", "name": "PASCUAL, PRECY R", "storeCode": "115"}, {"card": "CN0100000001814340", "name": "RENON, DIANA CANON", "storeCode": "115"}, {"card": "CN0100000001678176", "name": "GALLARDO, MIRASOL BALTAZAR", "storeCode": "115"}, {"card": "CN0100000001632186", "name": "OJEDA, ILYNN SANTY", "storeCode": "115"}, {"card": "CN0200000000006494", "name": "PAGBUNUCAN, LOURDES L", "storeCode": "115"}, {"card": "CN0100000001599119", "name": "MAGADIA, ELEONOR LAZONA", "storeCode": "115"}, {"card": "CN0100000001836770", "name": "MORALES, JENALYN L", "storeCode": "115"}, {"card": "CN0100000000027798", "name": "SOLOMON, MA BENITA DORIA", "storeCode": "115"}, {"card": "CN0100000001961198", "name": "ILIGAN, ELSIE A", "storeCode": "115"}, {"card": "CN0100000001382370", "name": "BRENDA, ROCAFOR VILLAROSA", "storeCode": "115"}, {"card": "CN0100000001961672", "name": "CO, TERESITA PERALTA", "storeCode": "115"}, {"card": "CN0100000000188440", "name": "FRAGO, ROSALIE RESARA", "storeCode": "115"}];
 
@@ -1760,5 +1852,6 @@ renderTemplatePicker();
 renderStoreSelect();
 loadStyleControlsOnce();
 </script>
+</div>
 </body>
 </html>

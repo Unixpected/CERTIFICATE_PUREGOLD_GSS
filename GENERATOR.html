@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ka-Asenso Gate Code Generator (Admin Only)</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#123a1c;margin:0;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;}
+  .box{background:#fff;border-radius:14px;padding:30px 28px;width:min(92vw,420px);
+       box-shadow:0 14px 34px rgba(0,0,0,.35);}
+  h1{font-size:17px;margin:0 0 4px;color:#1e5c30;}
+  .sub{font-size:12px;color:#777;margin:0 0 20px;}
+  label{font-size:12px;font-weight:600;color:#444;display:block;margin-bottom:4px;}
+  input[type=text],input[type=date]{
+    width:100%;box-sizing:border-box;padding:9px 10px;font-size:14px;
+    border:1.5px solid #ccc;border-radius:8px;margin-bottom:14px;
+  }
+  .codeOut{
+    text-align:center;font-size:28px;font-weight:700;letter-spacing:3px;
+    color:#1e5c30;background:#eaf6ec;border:1.5px dashed #3fa14a;border-radius:10px;
+    padding:16px 8px;margin-bottom:10px;user-select:all;
+  }
+  .dateLabel{text-align:center;font-size:12px;color:#888;margin-bottom:18px;}
+  button{
+    width:100%;padding:10px;font-size:14px;font-weight:600;color:#fff;
+    background:#1e5c30;border:none;border-radius:8px;cursor:pointer;
+  }
+  button:hover{background:#164322;}
+  .note{font-size:11px;color:#999;margin-top:16px;line-height:1.5;}
+  .warn{background:#fdecea;color:#a12525;border:1px solid #f5c6cb;border-radius:8px;
+        padding:8px 10px;font-size:11px;margin-top:14px;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>🔑 Ka-Asenso Gate Code Generator</h1>
+  <p class="sub">Computes the daily unlock code for the Certificate Printer — keep this file private, don't publish it alongside the app.</p>
+
+  <label for="saltInput">Secret Salt (must match GATE_SALT in the app)</label>
+  <input type="text" id="saltInput" value="PGKA-2026-CHANGE-ME" autocomplete="off">
+
+  <label for="dateInput">Date</label>
+  <input type="date" id="dateInput">
+
+  <div class="codeOut" id="codeOut">------</div>
+  <div class="dateLabel" id="dateLabel"></div>
+
+  <button onclick="generate()">Regenerate</button>
+
+  <div class="warn">⚠️ If you change the salt here, you must change GATE_SALT to the exact same value inside CERTIFICATE_CREATOR_GSS.html, or codes won't match.</div>
+  <p class="note">Uses the same SHA-256(salt + ":" + date) formula as the app, computed entirely in your browser — nothing is sent anywhere. Click on the code to select it for copying.</p>
+</div>
+
+<script>
+async function computeDailyCode(dateStr, salt){
+  const enc = new TextEncoder().encode(salt + ':' + dateStr);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  const hex = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const code = hex.slice(0,8).toUpperCase();
+  return code.slice(0,4) + '-' + code.slice(4,8);
+}
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+async function generate(){
+  const salt = document.getElementById('saltInput').value.trim();
+  const dateStr = document.getElementById('dateInput').value || todayStr();
+  const code = await computeDailyCode(dateStr, salt);
+  document.getElementById('codeOut').textContent = code;
+  const d = new Date(dateStr+'T00:00:00');
+  document.getElementById('dateLabel').textContent = 'for ' + d.toDateString();
+}
+
+document.getElementById('dateInput').value = todayStr();
+document.getElementById('saltInput').addEventListener('input', generate);
+document.getElementById('dateInput').addEventListener('input', generate);
+generate();
+</script>
+</body>
+</html>
